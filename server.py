@@ -474,4 +474,4 @@ if __name__ == '__main__':
     print('   curl http://localhost:5000/directories')
     print('   curl http://localhost:5000/files/out')
     print('   curl http://localhost:5000/out/CaptionedVideo.mp4')
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=7932)
