@@ -8,6 +8,7 @@ from flask_cors import CORS
 import tempfile
 import shutil
 import requests  # Add this import for downloading the video
+from tqdm import tqdm  # Add this import for the progress bar
 
 app = Flask(__name__)
 CORS(app)
@@ -75,13 +76,21 @@ def generate_random_clip(video_path, output_path, start_time, duration):
         return False
 
 def download_video(url, output_path):
-    """Descarga un video desde una URL y lo guarda en el path especificado"""
+    """Descarga un video desde una URL y lo guarda en el path especificado con barra de progreso"""
     try:
         response = requests.get(url, stream=True)
         response.raise_for_status()
+        total_size = int(response.headers.get('content-length', 0))
+        block_size = 1024  # Tamaño del bloque para la barra de progreso
+        progress_bar = tqdm(total=total_size, unit='B', unit_scale=True, desc="Descargando video")
+
         with open(output_path, 'wb') as f:
-            shutil.copyfileobj(response.raw, f)
-        print(f"Video descargado exitosamente en {output_path}")
+            for data in response.iter_content(block_size):
+                f.write(data)
+                progress_bar.update(len(data))
+        
+        progress_bar.close()
+        print(f"Video descargado exitosamente en {output_path} (Tamaño: {total_size / (1024 * 1024):.2f} MB)")
         return True
     except Exception as e:
         print(f"Error descargando el video: {e}")
