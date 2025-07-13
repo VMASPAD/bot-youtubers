@@ -1,2 +1,6 @@
 Flask==2.3.3
 Flask-CORS==4.0.0
+requests==2.31.0
+Werkzeug==2.3.3
+Flask-RESTful==0.3.9
+Flask-SocketIO==5.3.2
