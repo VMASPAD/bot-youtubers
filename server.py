@@ -303,7 +303,7 @@ def generate_clip():
         public_dir = "./public"
         if not os.path.exists(public_dir):
             os.makedirs(public_dir)
-        
+        os.remove(os.path.join(public_dir, "sample-video.json"))
         # Crear directorio único para esta sesión (temporal)
         session_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         session_dir = os.path.join(CLIPS_DIR, session_id)
