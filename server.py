@@ -21,7 +21,7 @@ if not os.path.exists(CLIPS_DIR):
 # Directorios permitidos para servir archivos estáticos
 ALLOWED_STATIC_DIRS = ['out', 'public', 'assets', 'src']
 
-VIDEO_URL = "https://portfoliotavm.com/n8n/milei/video.mp4"
+VIDEO_URL = "https://portfoliotavm.com/n8n/meme/video.mp4"
 VIDEO_PATH = "./video.mp4"
 
 def is_safe_path(basedir, path, follow_symlinks=True):
@@ -483,4 +483,4 @@ if __name__ == '__main__':
     print('   curl http://localhost:5000/directories')
     print('   curl http://localhost:5000/files/out')
     print('   curl http://localhost:5000/out/CaptionedVideo.mp4')
-    app.run(debug=True, host='0.0.0.0', port=7932)
+    app.run(debug=True, host='0.0.0.0', port=7930)
