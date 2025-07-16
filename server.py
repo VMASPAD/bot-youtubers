@@ -307,7 +307,7 @@ def generate_clip():
         # Verificar que el video es lo suficientemente largo
         if video_duration < 60:
             return jsonify({"error": "El video debe tener al menos 60 segundos"}), 400
-        
+        print("entrando en generate_clip")
         # Crear directorio público si no existe
         public_dir = "./public"
         if not os.path.exists(public_dir):
