@@ -5,11 +5,71 @@ import os
 import random
 from pathlib import Path
 import time
+import threading
+import shutil
+
 app = Flask(__name__)
 
 VIDEO_URL = "https://portfoliotavm.com/n8n/meme/video.mp4"
 ROUTE_CLIP = "./clip/"
 WHISPER_JSON = "./public/"
+
+def delete_files_after_delay(file_base_name, delay_minutes=5):
+    """
+    Elimina archivos con el nombre base especificado después de un tiempo determinado
+    """
+    def delete_files():
+        try:
+            time.sleep(delay_minutes * 60)  # Convertir minutos a segundos
+            
+            # Archivos a eliminar
+            mp4_file = os.path.join(WHISPER_JSON, f"{file_base_name}.mp4")
+            json_file = os.path.join(WHISPER_JSON, f"{file_base_name}.json")
+            out_dir = "./out/"
+            
+            files_deleted = []
+            
+            # Eliminar archivo MP4
+            if os.path.exists(mp4_file):
+                os.remove(mp4_file)
+                files_deleted.append(f"{file_base_name}.mp4")
+                print(f"Archivo eliminado: {mp4_file}")
+            
+            # Eliminar archivo JSON
+            if os.path.exists(json_file):
+                os.remove(json_file)
+                files_deleted.append(f"{file_base_name}.json")
+                print(f"Archivo eliminado: {json_file}")
+
+            # Eliminar la carpeta ./out/ si existe
+            if os.path.exists(out_dir) and os.path.isdir(out_dir):
+                try:
+                    # Elimina todos los archivos dentro de la carpeta ./out/
+                    for filename in os.listdir(out_dir):
+                        file_path = os.path.join(out_dir, filename)
+                        if os.path.isfile(file_path) or os.path.islink(file_path):
+                            os.remove(file_path)
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(file_path)
+                    # Elimina la carpeta ./out/
+                    os.rmdir(out_dir)
+                    print(f"Carpeta eliminada: {out_dir}")
+                    files_deleted.append("out/")
+                except Exception as e:
+                    print(f"Error eliminando carpeta {out_dir}: {e}")
+            
+            if files_deleted:
+                print(f"Limpieza automática completada después de {delay_minutes} minutos. Archivos eliminados: {', '.join(files_deleted)}")
+            else:
+                print(f"No se encontraron archivos para eliminar: {file_base_name}")
+                
+        except Exception as e:
+            print(f"Error durante la limpieza automática: {e}")
+    
+    # Ejecutar en un hilo separado para no bloquear la aplicación
+    cleanup_thread = threading.Thread(target=delete_files, daemon=True)
+    cleanup_thread.start()
+    print(f"Programada eliminación automática de archivos '{file_base_name}' en {delay_minutes} minutos")
 
 def download_video(url, destination_path):
     try:
@@ -119,88 +179,51 @@ def generate_random_clip(input_video, output_clip, min_duration=30, max_duration
 
 @app.route('/generate-clip', methods=['POST'])
 def generate_clip():
-    """Genera un clip aleatorio del video especificado"""
-    try:
-        # Descargar el video si no existe localmente
-        if not os.path.exists(VIDEO_PATH):
-            print(f"Descargando video desde {VIDEO_URL}...")
-            if not download_video(VIDEO_URL, VIDEO_PATH):
-                return jsonify({"error": "No se pudo descargar el video"}), 500
+        video_file = "./video.mp4"
+        
+        # Primero descargar el video si no existe
+        if not os.path.exists(video_file):
+            print("Video no encontrado, descargando...")
+            if not download_video(VIDEO_URL, video_file):
+                return {
+                    "status": "error",
+                    "message": "Error al descargar el video"
+                }
+        
+        clip_filename = f"sample-video.mp4"
+        clip_path = os.path.join(ROUTE_CLIP, clip_filename)
+        
+        # Generar clip aleatorio
+        if generate_random_clip(video_file, clip_path):
+            print("generando subtitulos")
+            # Mover el clip al directorio public con la ruta completa
+            public_clip_path = os.path.join(WHISPER_JSON, clip_filename)
+            os.rename(clip_path, public_clip_path)
+            print(public_clip_path)
+            # Generar transcripción (usando la ruta correcta)
+            generate_transcription = subprocess.run([
+                'node', './sub.mjs', public_clip_path
+            ], capture_output=True, text=True)
+            print("Transcripción:", generate_transcription.stdout)
+            if generate_transcription.stderr:
+                print("Error transcripción:", generate_transcription.stderr)
 
-        # Verificar que el archivo existe
-        if not os.path.exists(VIDEO_PATH):
-            return jsonify({"error": f"El archivo {VIDEO_PATH} no existe"}), 404
-        
-        # Verificar que es un archivo MP4
-        if not VIDEO_PATH.lower().endswith('.mp4'):
-            return jsonify({"error": "Solo se aceptan archivos MP4"}), 400
-        
-        # Obtener duración del video
-        video_duration = get_video_duration(VIDEO_PATH)
-        if video_duration is None:
-            return jsonify({"error": "No se pudo obtener la duración del video"}), 500
-        
-        # Verificar que el video es lo suficientemente largo
-        if video_duration < 60:
-            return jsonify({"error": "El video debe tener al menos 60 segundos"}), 400
-        
-        # Crear directorio público si no existe
-        public_dir = "./public"
-        if not os.path.exists(public_dir):
-            os.makedirs(public_dir)
-        os.remove(os.path.join(public_dir, "sample-video.json"))
-        # Crear directorio único para esta sesión (temporal)
-        session_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-        session_dir = os.path.join(CLIPS_DIR, session_id)
-        os.makedirs(session_dir, exist_ok=True)
-        
-        # Duración aleatoria entre 30-60 segundos
-        clip_duration = random.randint(30, 60)
-        
-        # Tiempo de inicio aleatorio (asegurar que el clip no se salga del video)
-        max_start_time = video_duration - clip_duration
-        if max_start_time <= 0:
-            return jsonify({"error": "El video es demasiado corto para generar un clip de la duración requerida"}), 400
-        
-        start_time = random.uniform(0, max_start_time)
-        
-        # Nombre del archivo temporal
-        temp_filename = f"clip_temp_{random.randint(1000, 9999)}.mp4"
-        temp_path = os.path.join(session_dir, temp_filename)
-        
-        # Generar el clip en formato 9:16
-        success = generate_random_clip(VIDEO_PATH, temp_path, start_time, clip_duration)
-
-        if success:
-            # Mover el archivo generado a ./public/sample-video.mp4
-            final_path = os.path.join(public_dir, "sample-video.mp4")
-            shutil.move(temp_path, final_path)
+            # Renderizar con Remotion
+            remotionClip = subprocess.run([
+                'npm', 'run', "render"
+            ], capture_output=True, text=True)
+            print("Remotion:", remotionClip.stdout)
+            if remotionClip.stderr:
+                print("Error Remotion:", remotionClip.stderr)
             
-            subprocess.run(["node", "./sub.mjs"])
-
-            # Ejecutar remotion render
-            subprocess.run(["npx", "remotion", "render"], check=True)
-            
-            clip_info = {
-                "filename": "sample-video.mp4",
-                "start_time": round(start_time, 2),
-                "duration": clip_duration,
-                "download_url": f"/public/sample-video.mp4",
-                "file_path": final_path,
-                "aspect_ratio": "9:16",
-                "out": "out/CaptionedVideo.mp4"
-            }
-            
-            # Limpiar directorio temporal de la sesión
-            shutil.rmtree(session_dir)
-            
-            response = {
-                "success": True,
-                "session_id": session_id,
-                "video_path": VIDEO_PATH,
-                "video_duration": round(video_duration, 2),
-                "clip": clip_info,
-                "message": "Clip generado en formato 9:16 y guardado en ./public/sample-video.mp4"
+            # Programar eliminación automática de archivos después de 5 minutos
+            delete_files_after_delay("sample-video", 5)
+                
+            return {
+                "status": "success",
+                "message": "Clip generado exitosamente",
+                "clip_path": public_clip_path,
+                "clip_filename": clip_filename
             }
         else:
             return {
@@ -208,11 +231,6 @@ def generate_clip():
                 "message": "Error al generar el clip"
             }
             
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Error: {str(e)}"
-        }
     
 @app.route('/out/<path:filename>', methods=['GET'])
 def serve_captioned_video(filename):
@@ -236,4 +254,4 @@ def home():
 if __name__ == '__main__':
     Path("clip").mkdir(exist_ok=True)
     Path("public").mkdir(exist_ok=True)
-    app.run(host='0.0.0.0', port=7243)
+    app.run(host='0.0.0.0', port=7242)
