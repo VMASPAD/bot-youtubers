@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AbsoluteFill,
   CalculateMetadataFunction,
-  continueRender,
-  delayRender,
   getStaticFiles,
   OffthreadVideo,
   Sequence,
@@ -56,8 +54,8 @@ export const CaptionedVideo: React.FC<{
   src: string;
 }> = ({ src }) => {
   const [subtitles, setSubtitles] = useState<Caption[]>([]);
-  const [handle] = useState(() => delayRender("wait video", { timeoutInMilliseconds: 120000, retries: 3 }));
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fontLoaded, setFontLoaded] = useState(false);
   const { fps } = useVideoConfig();
 
   const subtitlesFile = src
@@ -67,18 +65,20 @@ export const CaptionedVideo: React.FC<{
     .replace(/.webm$/, ".json");
 
   const fetchSubtitles = useCallback(async () => {
-    if (isLoaded) return; // Prevent multiple calls
-    
     try {
       console.log('Loading font and subtitles...');
-      await loadFont();
+      
+      // Load font first
+      if (!fontLoaded) {
+        await loadFont();
+        setFontLoaded(true);
+      }
       
       // Check if subtitles file exists first
       if (!getFileExists(subtitlesFile)) {
         console.log(`No subtitles file found: ${subtitlesFile}`);
         setSubtitles([]);
-        setIsLoaded(true);
-        continueRender(handle);
+        setIsLoading(false);
         return;
       }
       
@@ -91,49 +91,50 @@ export const CaptionedVideo: React.FC<{
       const data = (await res.json()) as Caption[];
       console.log(`Loaded ${data.length} captions`);
       setSubtitles(data);
-      setIsLoaded(true);
-      continueRender(handle);
+      setIsLoading(false);
     } catch (e) {
       console.error('Error loading subtitles:', e);
       setSubtitles([]);
-      setIsLoaded(true);
-      continueRender(handle); // Continue render even on error
+      setIsLoading(false);
     }
-  }, [handle, subtitlesFile, isLoaded]);
+  }, [subtitlesFile, fontLoaded]);
 
   useEffect(() => {
-    if (isLoaded) return;
-    
-    // Add a failsafe timeout
-    const failsafeTimeout = setTimeout(() => {
-      if (!isLoaded) {
-        console.warn('Failsafe timeout triggered, continuing render without subtitles');
-        setSubtitles([]);
-        setIsLoaded(true);
-        continueRender(handle);
-      }
-    }, 100000); // 100 seconds failsafe
-
     fetchSubtitles();
 
     const c = watchStaticFile(subtitlesFile, () => {
-      if (!isLoaded) {
-        fetchSubtitles();
-      }
+      fetchSubtitles();
     });
 
     return () => {
-      clearTimeout(failsafeTimeout);
       c.cancel();
     };
-  }, [fetchSubtitles, src, subtitlesFile, isLoaded]);
+  }, [fetchSubtitles, subtitlesFile]);
 
   const { pages } = useMemo(() => {
+    if (isLoading) return { pages: [] };
     return createTikTokStyleCaptions({
       combineTokensWithinMilliseconds: SWITCH_CAPTIONS_EVERY_MS,
       captions: subtitles ?? [],
     });
-  }, [subtitles]);
+  }, [subtitles, isLoading]);
+
+  // Show loading state or video with no captions while loading
+  if (isLoading) {
+    return (
+      <AbsoluteFill style={{ backgroundColor: "white" }}>
+        <AbsoluteFill>
+          <OffthreadVideo
+            style={{
+              objectFit: "cover",
+            }}
+            src={src}
+          />
+        </AbsoluteFill>
+        {/* No captions while loading */}
+      </AbsoluteFill>
+    );
+  }
 
   return (
     <AbsoluteFill style={{ backgroundColor: "white" }}>
