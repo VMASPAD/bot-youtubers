@@ -56,7 +56,8 @@ export const CaptionedVideo: React.FC<{
   src: string;
 }> = ({ src }) => {
   const [subtitles, setSubtitles] = useState<Caption[]>([]);
-  const [handle] = useState(() => delayRender("wait video",  {timeoutInMilliseconds: 700000, retries: 5}));
+  const [handle] = useState(() => delayRender("wait video", { timeoutInMilliseconds: 120000, retries: 3 }));
+  const [isLoaded, setIsLoaded] = useState(false);
   const { fps } = useVideoConfig();
 
   const subtitlesFile = src
@@ -66,43 +67,66 @@ export const CaptionedVideo: React.FC<{
     .replace(/.webm$/, ".json");
 
   const fetchSubtitles = useCallback(async () => {
+    if (isLoaded) return; // Prevent multiple calls
+    
     try {
+      console.log('Loading font and subtitles...');
       await loadFont();
       
       // Check if subtitles file exists first
       if (!getFileExists(subtitlesFile)) {
         console.log(`No subtitles file found: ${subtitlesFile}`);
         setSubtitles([]);
+        setIsLoaded(true);
         continueRender(handle);
         return;
       }
       
+      console.log(`Fetching subtitles from: ${subtitlesFile}`);
       const res = await fetch(subtitlesFile);
       if (!res.ok) {
         throw new Error(`Failed to fetch subtitles: ${res.status}`);
       }
       
       const data = (await res.json()) as Caption[];
+      console.log(`Loaded ${data.length} captions`);
       setSubtitles(data);
+      setIsLoaded(true);
       continueRender(handle);
     } catch (e) {
       console.error('Error loading subtitles:', e);
       setSubtitles([]);
+      setIsLoaded(true);
       continueRender(handle); // Continue render even on error
     }
-  }, [handle, subtitlesFile]);
+  }, [handle, subtitlesFile, isLoaded]);
 
   useEffect(() => {
+    if (isLoaded) return;
+    
+    // Add a failsafe timeout
+    const failsafeTimeout = setTimeout(() => {
+      if (!isLoaded) {
+        console.warn('Failsafe timeout triggered, continuing render without subtitles');
+        setSubtitles([]);
+        setIsLoaded(true);
+        continueRender(handle);
+      }
+    }, 100000); // 100 seconds failsafe
+
     fetchSubtitles();
 
     const c = watchStaticFile(subtitlesFile, () => {
-      fetchSubtitles();
+      if (!isLoaded) {
+        fetchSubtitles();
+      }
     });
 
     return () => {
+      clearTimeout(failsafeTimeout);
       c.cancel();
     };
-  }, [fetchSubtitles, src, subtitlesFile]);
+  }, [fetchSubtitles, src, subtitlesFile, isLoaded]);
 
   const { pages } = useMemo(() => {
     return createTikTokStyleCaptions({
