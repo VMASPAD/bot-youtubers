@@ -25,7 +25,6 @@ def delete_files_after_delay(file_base_name, delay_minutes=5):
             # Archivos a eliminar
             mp4_file = os.path.join(WHISPER_JSON, f"{file_base_name}.mp4")
             json_file = os.path.join(WHISPER_JSON, f"{file_base_name}.json")
-            out_dir = "./out/"
             
             files_deleted = []
             
@@ -41,22 +40,7 @@ def delete_files_after_delay(file_base_name, delay_minutes=5):
                 files_deleted.append(f"{file_base_name}.json")
                 print(f"Archivo eliminado: {json_file}")
 
-            # Eliminar la carpeta ./out/ si existe
-            """if os.path.exists(out_dir) and os.path.isdir(out_dir):
-                try:
-                    # Elimina todos los archivos dentro de la carpeta ./out/
-                    for filename in os.listdir(out_dir):
-                        file_path = os.path.join(out_dir, filename)
-                        if os.path.isfile(file_path) or os.path.islink(file_path):
-                            os.remove(file_path)
-                        elif os.path.isdir(file_path):
-                            shutil.rmtree(file_path)
-                    # Elimina la carpeta ./out/
-                    os.rmdir(out_dir)
-                    print(f"Carpeta eliminada: {out_dir}")
-                    files_deleted.append("out/")
-                except Exception as e:
-                    print(f"Error eliminando carpeta {out_dir}: {e}") """
+            
             
             if files_deleted:
                 print(f"Limpieza automática completada después de {delay_minutes} minutos. Archivos eliminados: {', '.join(files_deleted)}")
@@ -244,7 +228,27 @@ def serve_captioned_video(filename):
         return send_from_directory(folder_path, filename)
     except Exception as e:
         return {"error": str(e)}, 500
-    
+
+@app.route('/eliminate')
+def eliminate():
+    out_dir = "./out/"
+    # Eliminar la carpeta ./out/ si existe
+    if os.path.exists(out_dir) and os.path.isdir(out_dir):
+        try:
+            shutil.rmtree(out_dir)  # Elimina la carpeta y su contenido directamente
+            print(f"Carpeta eliminada: {out_dir}")
+        except Exception as e:
+            print(f"Error eliminando carpeta {out_dir}: {e}")
+    return {
+        "eliminated": "true"
+    }
+
+@app.route('/metadata')
+def metadata():
+    return {
+        "name": "Cuando te haces rico y se te olvida lo que vale currar"
+    }
+
 @app.route('/')
 def home():
     return {
