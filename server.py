@@ -10,7 +10,7 @@ import shutil
 
 app = Flask(__name__)
 
-VIDEO_URL = "https://portfoliotavm.com/n8n/vmaspad/video.mp4"
+VIDEO_URL = "https://portfoliotavm.com/n8n/meme/video.mp4"
 ROUTE_CLIP = "./clip/"
 WHISPER_JSON = "./public/"
 
@@ -246,7 +246,7 @@ def eliminate():
 @app.route('/metadata')
 def metadata():
     return {
-        "name": "MANOS ARRIBA, REDDIT ESTÁ MURIENDO 😭"
+        "name": "Cuando te haces rico y se te olvida lo que vale currar"
     }
 
 @app.route('/')
@@ -258,4 +258,4 @@ def home():
 if __name__ == '__main__':
     Path("clip").mkdir(exist_ok=True)
     Path("public").mkdir(exist_ok=True)
-    app.run(host='0.0.0.0', port=7246)
+    app.run(host='0.0.0.0', port=7242)
